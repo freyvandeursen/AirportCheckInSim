@@ -30,16 +30,16 @@ namespace PassengerLuggageAggregator
             Message message = mq.EndReceive(asyncResult.AsyncResult);
             string json = (string)message.Body;
 
-            var envelope = JsonSerializer.Deserialize<MessageEnvelope>(json);
+            var messageEnvelope = JsonSerializer.Deserialize<MessageEnvelope>(json);
 
-            switch(envelope.MessageType)
+            switch (messageEnvelope.MessageType)
             {
                 case "Luggage":
-                    var luggage = envelope.Payload.Deserialize<Luggage>();
+                    var luggage = messageEnvelope.Payload.Deserialize<Luggage>();
                     HandleLuggage(luggage);
                     break;
                 case "Passenger":
-                    var passenger = envelope.Payload.Deserialize<Passenger>();
+                    var passenger = messageEnvelope.Payload.Deserialize<Passenger>();
                     HandlePassenger(passenger);
                     break;
             }
@@ -52,14 +52,18 @@ namespace PassengerLuggageAggregator
         {
             passengerBuffer[passenger.ReservationNumber] = passenger;
 
-            if(luggageBuffer.ContainsKey(passenger.ReservationNumber))
+            if (int.Parse(passenger.PiecesOfLuggage) == 0)
+            {
+                finalizePassenger(passenger.ReservationNumber);
+            }
+            if (luggageBuffer.ContainsKey(passenger.ReservationNumber))
             {
                 if (luggageBuffer[passenger.ReservationNumber].Count() == int.Parse(passenger.PiecesOfLuggage))
                 {
                     finalizePassenger(passenger.ReservationNumber);
                 }
             }
-            
+
         }
 
 
@@ -83,7 +87,9 @@ namespace PassengerLuggageAggregator
             var aggregatedPassenger = new AggregatedPassenger
             {
                 passenger = passengerBuffer[reservationNumber],
-                luggage = luggageBuffer[reservationNumber]
+                luggage = luggageBuffer.ContainsKey(reservationNumber)
+                ? luggageBuffer[reservationNumber]
+                : new List<Luggage>()
             };
 
             //display passenger
@@ -95,13 +101,20 @@ namespace PassengerLuggageAggregator
             Console.WriteLine($"Luggage received: {aggregatedPassenger.luggage.Count}");
             Console.WriteLine("--------------------------------------------------");
 
-            foreach (var luggage in aggregatedPassenger.luggage)
+            if (aggregatedPassenger.luggage.Count() > 0)
             {
-                Console.WriteLine($"     Luggage ID: {luggage.Id}");
-                Console.WriteLine($"     Seq #: {luggage.Identification}/{luggage.TotalInSequence}");
-                Console.WriteLine($"     Category: {luggage.Category}");
-                Console.WriteLine($"     Weight: {luggage.Weight} kg");
-                Console.WriteLine();
+                foreach (var luggage in aggregatedPassenger.luggage)
+                {
+                    Console.WriteLine($"     Luggage ID: {luggage.Id}");
+                    Console.WriteLine($"     Seq #: {luggage.Identification}/{luggage.TotalInSequence}");
+                    Console.WriteLine($"     Category: {luggage.Category}");
+                    Console.WriteLine($"     Weight: {luggage.Weight} kg");
+                    Console.WriteLine();
+                }
+            }
+            else
+            {
+                Console.WriteLine("No luggage");
             }
 
             Console.WriteLine("--------------------------------------------------\n");
@@ -110,4 +123,4 @@ namespace PassengerLuggageAggregator
             //Consume
         }
     }
-    }
+}
